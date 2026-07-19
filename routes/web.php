@@ -7,5 +7,4 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-// Endpoint de la API (en web.php por simplicidad)
-Route::get('/api/tasks', [TaskController::class, 'index']);
+

@@ -8,39 +8,73 @@ use Illuminate\Support\Facades\Cache;
 class TaskRepository
 {
     /**
-     * Obtener tareas paginadas aplicando el patrón Cache-Aside.
+     * Obtener tareas paginadas aplicando el patrón Cache-Aside con filtros dinámicos.
      */
-    public function getPaginatedTasks(int $userId, int $perPage = 10, string $status = null)
+    public function getPaginatedTasks(int $userId, array $filters = [], int $perPage = 10)
     {
-        // Generación de clave única basada en el usuario, estado filtrado y página actual
+        // Generación de clave única basada en todos los parámetros de entrada
         $page = request()->get('page', 1);
-        $statusKey = $status ?? 'all';
-        $cacheKey = "tasks:user_{$userId}:status_{$statusKey}:page_{$page}";
+        $statusKey = $filters['status'] ?? 'all';
+        $searchKey = $filters['search'] ?? 'none';
+        $sortBy = $filters['sort_by'] ?? 'created_at';
+        $sortDir = $filters['sort_dir'] ?? 'desc';
+        
+        // Hashear los filtros para mantener la clave corta y manejable ante combinaciones largas
+        $filterHash = md5("{$statusKey}_{$searchKey}_{$sortBy}_{$sortDir}_{$page}");
+        
+        $cacheKey = "tasks:user_{$userId}:list:{$filterHash}";
 
-        // Implementación del Patrón Cache-Aside (Lazy Loading) mediante Redis.
-        // Se busca el registro en caché; ante un 'miss', se ejecuta la consulta SQL y se almacena con un TTL de 300 segundos.
-        return Cache::remember($cacheKey, 300, function () use ($userId, $perPage, $status) {
+        // Implementación del Patrón Cache-Aside (Lazy Loading) mediante Redis con Tags.
+        // Los Tags permiten agrupar claves para invalidarlas simultáneamente.
+        return Cache::tags(['tasks', "user_{$userId}"])->remember($cacheKey, 300, function () use ($userId, $filters, $perPage, $sortBy, $sortDir) {
             $query = Task::where('user_id', $userId);
             
-            if ($status) {
-                $query->where('status', $status);
+            if (!empty($filters['status'])) {
+                $query->where('status', $filters['status']);
             }
 
-            return $query->orderBy('created_at', 'desc')->paginate($perPage);
+            if (!empty($filters['search'])) {
+                $query->where(function($q) use ($filters) {
+                    $q->where('title', 'like', '%' . $filters['search'] . '%')
+                      ->orWhere('description', 'like', '%' . $filters['search'] . '%');
+                });
+            }
+
+            // Validar dirección del sort
+            $sortDir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
+
+            return $query->orderBy($sortBy, $sortDir)->paginate($perPage);
         });
     }
 
+    public function create(array $data)
+    {
+        $task = Task::create($data);
+        $this->clearUserCache($task->user_id);
+        return $task;
+    }
+
+    public function update(Task $task, array $data)
+    {
+        $task->update($data);
+        $this->clearUserCache($task->user_id);
+        return $task;
+    }
+
+    public function delete(Task $task)
+    {
+        $userId = $task->user_id;
+        $task->delete();
+        $this->clearUserCache($userId);
+    }
+
     /**
-     * Invalidación manual de la caché asociada a un usuario.
+     * Invalidación nativa de la caché asociada a un usuario mediante Cache Tags.
      */
     public function clearUserCache(int $userId)
     {
-        // En implementaciones nativas de Redis se emplean tags o iteración de claves.
-        // A modo de simplificación técnica, se purgan las primeras 10 páginas cacheadas para cada estado posible.
-        for ($i = 1; $i <= 10; $i++) {
-            Cache::forget("tasks:user_{$userId}:status_all:page_{$i}");
-            Cache::forget("tasks:user_{$userId}:status_pending:page_{$i}");
-            Cache::forget("tasks:user_{$userId}:status_completed:page_{$i}");
-        }
+        // Al usar un driver como Redis o Array, podemos invalidar instantáneamente 
+        // todas las listas (páginas y filtros combinados) del usuario.
+        Cache::tags(["user_{$userId}"])->flush();
     }
 }
