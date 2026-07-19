@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestor de Tareas – Demo API</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p.hint { font-size: 0.85rem; color: #555; margin-bottom: 1.5rem; }
+    .controls { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: flex-end; }
+    .controls label { font-size: 0.8rem; color: #444; display: flex; flex-direction: column; gap: 0.25rem; }
+    .controls input, .controls select { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    button { padding: 0.45rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    button:hover { background: #1d4ed8; }
+    #meta { font-size: 0.8rem; color: #555; margin-bottom: 1rem; min-height: 1.2rem; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    th { background: #2563eb; color: #fff; padding: 0.6rem 0.8rem; text-align: left; font-size: 0.85rem; }
+    td { padding: 0.55rem 0.8rem; font-size: 0.85rem; border-bottom: 1px solid #eee; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
+    .badge-pending    { background: #fef3c7; color: #92400e; }
+    .badge-in_progress{ background: #dbeafe; color: #1e40af; }
+    .badge-completed  { background: #d1fae5; color: #065f46; }
+    #empty { text-align: center; padding: 2rem; color: #888; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Gestor de Tareas – Demo de la API</h1>
+  <p class="hint">
+    Abre las DevTools (F12 → pestaña Network) para observar la petición
+    <strong>GET /api/tasks</strong> y verificar el flujo completo:
+    Frontend → Backend (Laravel) → Redis → MySQL.
+  </p>
+
+  <div class="controls">
+    <label>
+      Buscar
+      <input id="search" type="text" placeholder="Título o descripción..." />
+    </label>
+    <label>
+      Estado
+      <select id="status">
+        <option value="">Todos</option>
+        <option value="pending">Pendiente</option>
+        <option value="in_progress">En progreso</option>
+        <option value="completed">Completada</option>
+      </select>
+    </label>
+    <label>
+      Ordenar por
+      <select id="sort_by">
+        <option value="created_at">Fecha creación</option>
+        <option value="title">Título</option>
+        <option value="status">Estado</option>
+      </select>
+    </label>
+    <label>
+      Dirección
+      <select id="sort_dir">
+        <option value="desc">Descendente</option>
+        <option value="asc">Ascendente</option>
+      </select>
+    </label>
+    <button onclick="fetchTasks(1)">Buscar</button>
+  </div>
+
+  <div id="meta">Cargando...</div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Título</th>
+        <th>Descripción</th>
+        <th>Estado</th>
+        <th>Creado</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <p id="empty">No se encontraron tareas con los filtros seleccionados.</p>
+
+  <div id="pagination" style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:center;"></div>
+
+  <script>
+    let currentPage = 1;
+
+    async function fetchTasks(page = 1) {
+      currentPage = page;
+      const search  = document.getElementById('search').value;
+      const status  = document.getElementById('status').value;
+      const sort_by = document.getElementById('sort_by').value;
+      const sort_dir= document.getElementById('sort_dir').value;
+
+      const params = new URLSearchParams({ page, sort_by, sort_dir });
+      if (search) params.set('search', search);
+      if (status) params.set('status', status);
+
+      document.getElementById('meta').textContent = 'Consultando API...';
+
+      try {
+        const res  = await fetch(`/api/tasks?${params}`);
+        const json = await res.json();
+
+        const { meta, data } = json;
+        document.getElementById('meta').textContent =
+          `Total: ${meta.total} tareas | Página ${meta.current_page}/${meta.last_page} | Tiempo: ${meta.query_time_ms} ms`;
+
+        const tbody = document.getElementById('tbody');
+        tbody.innerHTML = '';
+
+        if (!data.length) {
+          document.getElementById('empty').style.display = 'block';
+          document.getElementById('table').style.display = 'none';
+        } else {
+          document.getElementById('empty').style.display = 'none';
+          document.getElementById('table').style.display = '';
+          data.forEach(task => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${task.id}</td>
+              <td>${task.title}</td>
+              <td>${task.description ?? '—'}</td>
+              <td><span class="badge badge-${task.status}">${task.status}</span></td>
+              <td>${new Date(task.created_at).toLocaleDateString('es-ES')}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+
+        // Paginación
+        const pag = document.getElementById('pagination');
+        pag.innerHTML = '';
+        for (let p = 1; p <= meta.last_page; p++) {
+          const btn = document.createElement('button');
+          btn.textContent = p;
+          btn.style.background = p === meta.current_page ? '#1d4ed8' : '#6b7280';
+          btn.onclick = () => fetchTasks(p);
+          pag.appendChild(btn);
+        }
+      } catch (e) {
+        document.getElementById('meta').textContent = 'Error al conectar con la API. ¿Está el servidor corriendo?';
+      }
+    }
+
+    // Cargar al inicio
+    fetchTasks(1);
+  </script>
+</body>
+</html>
