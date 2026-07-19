@@ -1,59 +1,92 @@
 # Gestor de Tareas (Proyecto Fin de Curso)
 
-API RESTful desarrollada para la gestión eficiente de tareas de usuarios, implementando patrones de arquitectura escalables, manejo de estado externalizado y estrategias de almacenamiento en caché para optimizar el rendimiento y reducir la carga de la base de datos.
+API RESTful para la gestión de tareas de usuarios, implementando patrones de arquitectura escalable, acceso eficiente a datos mediante ORM y caché con Redis bajo el patrón Cache-Aside.
 
 ## Tecnologías
 
-* **PHP 8.4**
-* **Laravel 11.x** (Framework Backend)
+* **PHP 8.4** con **Laravel 11.x** (Framework Backend)
 * **MySQL 8.0** (Base de Datos Relacional)
-* **Redis 7** (Caché en Memoria y Sesiones)
-* **Docker & Docker Compose** (Contenerización del entorno)
+* **Redis 7** (Caché en Memoria con soporte de Tags)
+* **Docker & Docker Compose** (Orquestación del entorno)
 * **PHPUnit** (Pruebas Unitarias)
 
 ## Instalación
 
 1. **Clona el repositorio:**
    ```bash
-   git clone https://github.com/usuario/gestor-tareas-pfc.git
-   cd gestor-tareas-pfc
+   git clone https://github.com/Jhon-Kevin-Rios-Cuyabazo/PE3-gestor_tareas.git
+   cd PE3-gestor_tareas
    ```
 
 2. **Copia las variables de entorno:**
-   Copia el archivo de ejemplo para generar tus propias configuraciones locales.
    ```bash
    cp .env.example .env
    ```
 
-3. **Levanta los contenedores (Docker):**
-   Inicia los servicios de base de datos (MySQL) y caché (Redis) en segundo plano.
+3. **Levanta los servicios (MySQL + Redis + App):**
    ```bash
    docker compose up -d
    ```
 
-4. **Instala dependencias y prepara la base de datos:**
-   Ejecuta los siguientes comandos utilizando el contenedor de PHP provisto por Docker para no depender de instalaciones locales:
+4. **Instala dependencias e inicializa la aplicación:**
    ```bash
-   # Instalar dependencias de Composer
-   docker run --rm -v ${PWD}:/app -w /app php:8.4-cli composer install
+   # Instalar dependencias de PHP
+   docker compose exec app composer install
 
-   # Generar la llave de la aplicación
-   docker run --rm -v ${PWD}:/app -w /app php:8.4-cli php artisan key:generate
+   # Generar clave de aplicación
+   docker compose exec app php artisan key:generate
 
-   # Ejecutar migraciones y poblar la base de datos con datos de prueba
-   docker run --rm -v ${PWD}:/app -w /app php:8.4-cli php artisan migrate --seed
-   ```
-
-5. **Ejecuta el servidor de desarrollo:**
-   ```bash
-   docker run --rm -v ${PWD}:/app -w /app -p 8000:8000 php:8.4-cli php artisan serve --host=0.0.0.0
+   # Ejecutar migraciones y poblar la base de datos (≥50 registros)
+   docker compose exec app php artisan migrate --seed
    ```
 
 La API estará disponible en: `http://localhost:8000/api/tasks`
 
+La demo frontend estará disponible en: `http://localhost:8000` (abre DevTools → Network para ver el flujo completo)
+
+## Endpoints disponibles
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/tasks` | Listar tareas con filtros y paginación |
+| `POST` | `/api/tasks` | Crear tarea |
+| `GET` | `/api/tasks/{id}` | Ver tarea por ID |
+| `PUT` | `/api/tasks/{id}` | Actualizar tarea |
+| `DELETE` | `/api/tasks/{id}` | Eliminar tarea |
+
+**Parámetros opcionales de `GET /api/tasks`:**
+
+| Parámetro | Ejemplo | Descripción |
+|---|---|---|
+| `search` | `search=reunión` | Busca en título y descripción |
+| `status` | `status=pending` | Filtra por estado |
+| `sort_by` | `sort_by=title` | Campo de orden (`id`, `title`, `status`, `created_at`) |
+| `sort_dir` | `sort_dir=asc` | Dirección del orden (`asc`, `desc`) |
+| `page` | `page=2` | Página de resultados |
+
 ## Pruebas
 
-Para ejecutar la suite de pruebas unitarias (PHPUnit) y verificar la cobertura del repositorio:
 ```bash
-docker run --rm -v ${PWD}:/app -w /app php:8.4-cli php artisan test
+# Ejecutar suite completa de pruebas unitarias
+docker compose exec app php artisan test
+```
+
+## Benchmark de Caché
+
+El proyecto incluye un comando Artisan para medir el speedup del patrón Cache-Aside automáticamente (10 iteraciones sin caché vs con caché):
+
+```bash
+docker compose exec app php artisan benchmark:cache
+```
+
+Salida esperada (ejemplo):
+```
++------------+----------------+---------------+
+| Iteración  | Sin caché (ms) | Con caché (ms)|
++------------+----------------+---------------+
+| 1          | 42.3           | 1.2           |
+| ...        | ...            | ...           |
++------------+----------------+---------------+
+| Speedup (S = T_sin / T_con) | ~41x          |
++-----------------------------+---------------+
 ```
