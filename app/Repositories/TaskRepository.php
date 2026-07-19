@@ -40,8 +40,10 @@ class TaskRepository
                 });
             }
 
-            // Validar dirección del sort
+            // Validar dirección y campo del sort (Whitelist)
             $sortDir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
+            $allowedSorts = ['id', 'title', 'status', 'created_at', 'updated_at'];
+            $sortBy = in_array($sortBy, $allowedSorts) ? $sortBy : 'created_at';
 
             return $query->orderBy($sortBy, $sortDir)->paginate($perPage);
         });

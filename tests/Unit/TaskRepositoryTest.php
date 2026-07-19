@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Unit;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -68,5 +68,33 @@ class TaskRepositoryTest extends TestCase
         // 5. Tercera lectura: lista debe venir vacía.
         $result3 = $this->repository->getPaginatedTasks($user->id);
         $this->assertCount(0, $result3->items());
+    }
+    public function test_get_paginated_tasks_applies_filters_and_sorting()
+    {
+        $user = User::factory()->create();
+        
+        $task1 = $this->repository->create(['user_id' => $user->id, 'title' => 'Alpha Task', 'status' => 'pending']);
+        $task2 = $this->repository->create(['user_id' => $user->id, 'title' => 'Beta Task', 'status' => 'completed']);
+        $task3 = $this->repository->create(['user_id' => $user->id, 'title' => 'Gamma Project', 'status' => 'pending']);
+
+        // Test status filter
+        $resultStatus = $this->repository->getPaginatedTasks($user->id, ['status' => 'completed']);
+        $this->assertCount(1, $resultStatus->items());
+        $this->assertEquals('Beta Task', $resultStatus->items()[0]->title);
+
+        // Test search filter
+        $resultSearch = $this->repository->getPaginatedTasks($user->id, ['search' => 'Task']);
+        $this->assertCount(2, $resultSearch->items()); // Alpha Task, Beta Task
+
+        // Test sort by title asc
+        $resultSortAsc = $this->repository->getPaginatedTasks($user->id, ['sort_by' => 'title', 'sort_dir' => 'asc']);
+        $this->assertEquals('Alpha Task', $resultSortAsc->items()[0]->title);
+        $this->assertEquals('Beta Task', $resultSortAsc->items()[1]->title);
+        $this->assertEquals('Gamma Project', $resultSortAsc->items()[2]->title);
+
+        // Test sort by title desc
+        $resultSortDesc = $this->repository->getPaginatedTasks($user->id, ['sort_by' => 'title', 'sort_dir' => 'desc']);
+        $this->assertEquals('Gamma Project', $resultSortDesc->items()[0]->title);
+        $this->assertEquals('Beta Task', $resultSortDesc->items()[1]->title);
     }
 }

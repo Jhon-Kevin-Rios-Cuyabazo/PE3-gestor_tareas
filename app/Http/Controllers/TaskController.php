@@ -64,6 +64,11 @@ class TaskController extends Controller
         return response()->json($task, 201);
     }
 
+    public function show(Task $task)
+    {
+        return response()->json($task, 200);
+    }
+
     public function update(Request $request, Task $task)
     {
         $validated = $request->validate([
