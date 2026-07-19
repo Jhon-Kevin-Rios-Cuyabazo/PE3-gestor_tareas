@@ -12,6 +12,7 @@ class TaskSeeder extends Seeder
      */
     public function run(): void
     {
-        \App\Models\Task::factory()->count(50)->create();
+        $user = \App\Models\User::first();
+        \App\Models\Task::factory()->count(50)->create(['user_id' => $user->id]);
     }
 }
