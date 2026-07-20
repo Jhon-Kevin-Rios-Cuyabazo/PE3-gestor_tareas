@@ -23,9 +23,9 @@ API RESTful para la gestión de tareas de usuarios, implementando patrones de ar
    cp .env.example .env
    ```
 
-3. **Levanta los servicios (MySQL + Redis + App):**
+3. **Construye y levanta los servicios (MySQL + Redis + App):**
    ```bash
-   docker compose up -d
+   docker compose up -d --build
    ```
 
 4. **Instala dependencias e inicializa la aplicación:**
@@ -67,8 +67,11 @@ La demo frontend estará disponible en: `http://localhost:8000` (abre DevTools �
 ## Pruebas
 
 ```bash
-# Ejecutar suite completa de pruebas unitarias
+# Ejecutar suite completa de pruebas unitarias y features
 docker compose exec app php artisan test
+
+# Ejecutar pruebas generando el reporte de cobertura
+docker compose exec app php artisan test --coverage
 ```
 
 ## Benchmark de Caché
